@@ -1,7 +1,10 @@
 import time
 import re
 import os
+from multiprocessing.pool import worker
+
 import requests
+import json
 from typing import List, AsyncGenerator
 
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -78,7 +81,33 @@ async def log_requests(request: Request, call_next):
         media_type=response.media_type,
     )
 
+PROMPT = """Ты - информационный агент Университета ИТМО. Твоя задача - предоставлять точную информацию об университете в строго определенном формате.
 
+ВАЖНЫЕ ПРАВИЛА:
+1. Ты ВСЕГДА отвечаешь в формате JSON
+2. Структура JSON-ответа должна содержать следующие поля:
+   - answer: число от 1 до 10 для вопросов с вариантами ответов, или null для вопросов без вариантов
+   - reasoning: текстовое объяснение ответа
+
+3. При ответе на вопросы используй только достоверную информацию об ИТМО
+4. В поле reasoning предоставляй краткое, но информативное объяснение
+
+ПРИМЕР ВХОДНОГО ЗАПРОСА:
+{
+  "query": "В каком городе находится главный кампус Университета ИТМО?\n1. Москва\n2. Санкт-Петербург\n3. Екатеринбург\n4. Нижний Новгород",
+}
+
+ПРИМЕР ПРАВИЛЬНОГО ОТВЕТА:
+{
+  "answer": 2,
+  "reasoning": "Главный кампус Университета ИТМО исторически расположен в Санкт-Петербурге. Основные учебные корпуса находятся в центре города, включая знаменитое здание на Кронверкском проспекте.",
+}
+
+ВАЖНО: 
+- Всегда проверяй валидность JSON перед ответом
+- Не добавляй лишних полей в JSON
+- Если не уверен в точности информации, укажи это в reasoning
+"""
 
 def get_ai_response(query: str) -> str:
     headers = {
@@ -86,9 +115,9 @@ def get_ai_response(query: str) -> str:
         "Content-Type": "application/json"
     }
     payload = {
-        "modelUri": f"gpt://{FOLDER_ID}/yandexgpt-lite",
+        "modelUri": f"gpt://{FOLDER_ID}/yandexgpt/latest",
         "completionOptions": {"stream": False, "temperature": 0.7, "maxTokens": "2000"},
-        "messages": [{"role": "user", "text": query}]
+        "messages": [{"role": "system", "text": PROMPT},{"role": "user", "text": query}]
     }
     response = requests.post(YANDEX_GPT_API_URL, headers=headers, json=payload)
     if response.status_code == 200:
@@ -104,11 +133,16 @@ async def predict(body: PredictionRequest):
             logger.info(f"Processing prediction request with id: {body.id}")
 
         answer = get_ai_response(body.query)
+        json_string = answer.strip('`\n')
+        data = json.loads(json_string)
+
+        #logger.info(data['answer'])
+        #logger.info(data['reasoning'])
 
         response = PredictionResponse(
             id=body.id,
-            answer=answer,
-            reasoning="Ответ получен с помощью YandexGPT.",
+            answer=str(data['answer']),
+            reasoning=data['reasoning'],
             sources=[]
         )
 

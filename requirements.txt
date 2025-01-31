@@ -1,0 +1,7 @@
+fastapi
+aiologger[aiofiles]
+pip-chill
+uvicorn
+gunicorn
+requests
+python-dotenv
