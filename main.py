@@ -2,6 +2,8 @@ import time
 import re
 import os
 from multiprocessing.pool import worker
+from typing import Optional, List
+
 
 import requests
 import json
@@ -42,7 +44,7 @@ class PredictionRequest(BaseModel):
 
 class PredictionResponse(BaseModel):
     id: int
-    answer: str | None
+    answer: Optional[str]
     reasoning: str
     sources: List[HttpUrl]
 
